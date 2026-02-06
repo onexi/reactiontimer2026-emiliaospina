@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reaction Timer 2026</title>
+    <style>
+        body { 
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+        display: flex; 
+        flex-direction: column; 
+        align-items: center; 
+        justify-content: center; 
+        min-height: 100vh; 
+        margin: 0; 
+        background-color: #f0f2f5; 
+        color: #333;
+    }
+
+    #box { 
+        width: 320px; 
+        height: 320px; 
+        background-color: #2c3e50; 
+        color: white; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        cursor: pointer; 
+        border-radius: 20px; 
+        user-select: none; 
+        font-size: 1.6rem; 
+        font-weight: bold;
+        text-align: center; 
+        padding: 20px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        transition: transform 0.1s, background-color 0.3s;
+    }
+
+    #box:active { transform: scale(0.98); }
+
+    .waiting { background-color: #e74c3c !important; box-shadow: 0 0 20px rgba(231, 76, 60, 0.4) !important; }
+    .ready { background-color: #2ecc71 !important; box-shadow: 0 0 20px rgba(46, 204, 113, 0.4) !important; }
+
+    #username { 
+        padding: 12px; 
+        margin-bottom: 20px; 
+        border-radius: 8px; 
+        border: 2px solid #ddd; 
+        width: 280px; 
+        font-size: 1rem;
+        outline: none;
+        transition: border-color 0.3s;
+    }
+
+    #username:focus { border-color: #3498db; }
+
+    #resetBtn {
+        background-color: #95a5a6;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 5px;
+        font-size: 0.9rem;
+        transition: background-color 0.2s;
+    }
+
+    #resetBtn:hover { background-color: #7f8c8d; }
+
+    table { 
+        margin-top: 20px; 
+        border-collapse: collapse; 
+        width: 350px; 
+        background: white;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+    }
+
+    th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; }
+    th { background-color: #3498db; color: white; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px; }
+    </style>
+</head>
+<body>
+
+    <input type="text" id="username" placeholder="Enter your name to compete">
+    <h1>Reaction Timer</h1>
+    
+    <div id="box">Click to Start</div>
+    
+    <p id="message">Wait for the green box!</p>
+
+    <button id="resetBtn" style="margin-top: 10px; cursor: pointer;">Reset Leaderboard</button>
+
+    <div id="leaderboard-section">
+        <h3>🏆 Top 5 Times</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Time (ms)</th>
+                </tr>
+            </thead>
+            <tbody id="leaderboardBody"></tbody>
+        </table>
+    </div>
+
+    <script>
+        const box = document.getElementById('box');
+        const message = document.getElementById('message');
+        const nameInput = document.getElementById('username');
+        const leaderboardBody = document.getElementById('leaderboardBody');
+
+        let startTime;
+        let timeout;
+
+        box.addEventListener('click', () => {
+            if (box.classList.contains('waiting')) {
+                // ANTI-CHEAT: Early click
+                clearTimeout(timeout);
+                alert("Too early! Don't click until it turns green.");
+                resetGame();
+            } else if (box.classList.contains('ready')) {
+                // SUCCESS: Record reaction
+                const reactionTime = Date.now() - startTime;
+                const name = nameInput.value || "Anonymous";
+
+                fetch('/submit-score', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name, time: reactionTime })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    message.innerText = `Saved! ${name}: ${reactionTime}ms`;
+                    updateLeaderboard();
+                });
+
+                resetGame();
+            } else {
+                // START GAME
+                startGame();
+            }
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            if (confirm("Are you sure you want to clear all scores?")) {
+                fetch('/reset-leaderboard', { method: 'DELETE' })
+                    .then(() => updateLeaderboard()); // Refresh the empty table
+            }
+        });
+
+        function startGame() {
+            message.innerText = "Wait for green...";
+            box.innerText = ""; 
+            box.classList.add('waiting');
+            
+            const randomDelay = Math.floor(Math.random() * 3000) + 2000;
+            
+            timeout = setTimeout(() => {
+                box.classList.remove('waiting');
+                box.classList.add('ready');
+                box.innerText = "CLICK!"; 
+                startTime = Date.now();
+            }, randomDelay);
+        }
+
+        function resetGame() {
+            box.classList.remove('waiting', 'ready');
+            box.innerText = "Click to Start Again";
+        }
+
+        function updateLeaderboard() {
+            fetch('/leaderboard')
+                .then(res => res.json())
+                .then(data => {
+                    leaderboardBody.innerHTML = data.map(entry => 
+                        `<tr><td>${entry.name}</td><td>${entry.time}ms</td></tr>`
+                    ).join('');
+                });
+        }
+
+        // Initialize the leaderboard on page load
+        updateLeaderboard();
+    </script>
+</body>
+</html>
